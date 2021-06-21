@@ -1,10 +1,5 @@
 #pragma once
 
-// preprocessor of market data
-// it mainly does two things:
-//  1. construct message from udp packets
-//  2. uncompress message if needed
-
 #include <functional>
 #include <memory>
 #include <map>
@@ -52,9 +47,14 @@ struct __attribute__((packed)) MessageHeader
 
     bool compressed() const
     {
-        return be16toh(be_compressed) == 0x01;
+        return be_compressed == 0x0001;
     }
 };
+
+// preprocessor of market data
+// it mainly does two things:
+//  1. construct message from udp packets
+//  2. uncompress message if needed
 
 class MdPreprocessor
 {
@@ -130,12 +130,12 @@ public:
 
         int result = uncompress(decompressed_message_.get(), &decompressed_size, message + sizeof(MessageHeader), be32toh(header->be_size_after_compress));
         assert(decompressed_size == be32toh(header->be_size_before_compress));
-
         if (result != Z_OK)
         {
             std::cerr << "uncompress failed with code " << result << ", skip this message" << '\n';
             return nullptr;
         }
+        return decompressed_message_.get();
     }
 
 private:
@@ -150,6 +150,12 @@ private:
 
     void save_to_cache(const PayloadHeader *payload)
     {
+        if (payload->body_size() > 1500)
+        {
+            std::cerr << "packet size too big: " << payload->body_size() << '\n';
+            std::cerr << "sequence id: " << payload->sequence_id() << '\n';
+        }
+
         auto &per_channel_cache = cache_[payload->channel_id()];
         if (per_channel_cache[payload->sequence_id()].empty())
         {
@@ -165,6 +171,7 @@ private:
         // copy to make sure message staying valid
         const u_char *body =
             reinterpret_cast<const u_char *>(payload) + sizeof(PayloadHeader);
+
         for (int i = 0; i < payload->body_size(); i++)
         {
             char_vec.push_back(body[i]);
