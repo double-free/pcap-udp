@@ -1,9 +1,12 @@
-#include "md/exchange_message.h"
-#include "md/udp_payload_parser.h"
+#include "md/preprocessor.h"
 #include "pcap/pcap_reader.h"
 #include "pcap/pcap_to_udp.h"
 
 #include <iostream>
+
+void md_handler(const u_char *md)
+{
+}
 
 int main(int argc, char const *argv[])
 {
@@ -21,7 +24,7 @@ int main(int argc, char const *argv[])
     return 2;
   }
 
-  MessageParser parser;
+  MdPreprocessor processor(md_handler);
 
   // processed message count
   int count = 0;
@@ -31,7 +34,7 @@ int main(int argc, char const *argv[])
     udp_payload = reader.extract_from_pcap_packet(extract_udp_payload);
     if (udp_payload != nullptr)
     {
-      count += parser.parse_data(udp_payload);
+      count += processor.process(udp_payload);
     }
   } while (udp_payload != nullptr);
 
