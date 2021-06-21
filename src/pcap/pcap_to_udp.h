@@ -10,15 +10,18 @@
 #include <iostream>
 
 const u_char *extract_udp_payload(const pcap_pkthdr &header,
-                                  const u_char *packet) {
+                                  const u_char *packet)
+{
   auto *ethernet_header = reinterpret_cast<const ether_header *>(packet);
-  if (ntohs(ethernet_header->ether_type) != ETHERTYPE_IP) {
+  if (ntohs(ethernet_header->ether_type) != ETHERTYPE_IP)
+  {
     // ignore non ip packet
     return nullptr;
   }
 
   auto *ip_header = reinterpret_cast<const ip *>(packet + sizeof(ether_header));
-  if (ip_header->ip_p != IPPROTO_UDP) {
+  if (ip_header->ip_p != IPPROTO_UDP)
+  {
     // ignore non udp packet
     return nullptr;
   }

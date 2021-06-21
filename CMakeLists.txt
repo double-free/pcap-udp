@@ -23,4 +23,4 @@ else()
 endif()
 
 add_executable( ${PROJECT_NAME} src/main.cpp )
-target_link_libraries( ${PROJECT_NAME} pcap )
+target_link_libraries( ${PROJECT_NAME} pcap z )
