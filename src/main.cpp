@@ -1,21 +1,11 @@
 #include "md/preprocessor.h"
 #include "pcap/pcap_reader.h"
 #include "pcap/pcap_to_udp.h"
-#include "md/md_parser.h"
 #include "md/utils.h"
 
+#include "csv/writer.h"
+
 #include <iostream>
-
-void md_handler(const u_char *md)
-{
-  const auto *header = reinterpret_cast<const md::MdHeader *>(md);
-
-  if (header->message_type() == md::MessageType::Trade)
-  {
-    std::cout << "find a trade message with length " << header->body_size() << ": ";
-    print_hex_array(md, header->body_size() + sizeof(md::MdHeader));
-  }
-}
 
 int main(int argc, char const *argv[])
 {
@@ -33,6 +23,37 @@ int main(int argc, char const *argv[])
     return 2;
   }
 
+  csv::Writer order_writer("md_order.csv");
+  csv::Writer trade_writer("md_trade.csv");
+  csv::Writer snapshot_writer("md_snapshot.csv");
+  auto md_handler = [&order_writer, &trade_writer, &snapshot_writer](const u_char *md) -> bool
+  {
+    const auto *header = reinterpret_cast<const md::MdHeader *>(md);
+    switch (header->message_type())
+    {
+    case md::MessageType::Order:
+    {
+      const auto *order = reinterpret_cast<const md::Order *>(md + sizeof(md::MdHeader));
+      order_writer.write_order(*order);
+      break;
+    }
+    case md::MessageType::Trade:
+    {
+      const auto *trade = reinterpret_cast<const md::Trade *>(md + sizeof(md::MdHeader));
+      trade_writer.write_trade(*trade, 987654321, 123456789);
+      break;
+    }
+    case md::MessageType::Snapshot:
+    {
+      const auto *snapshot = reinterpret_cast<const md::Snapshot *>(md + sizeof(md::MdHeader));
+      snapshot_writer.write_snapshot(*snapshot);
+      break;
+    }
+    default:
+      return false;
+    }
+    return true;
+  };
   MdPreprocessor processor(md_handler);
 
   // processed message count

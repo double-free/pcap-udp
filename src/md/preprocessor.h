@@ -1,5 +1,7 @@
 #pragma once
 
+#include "utils.h"
+
 #include <functional>
 #include <memory>
 #include <map>
@@ -59,10 +61,21 @@ struct __attribute__((packed)) MessageHeader
 class MdPreprocessor
 {
 public:
-    using MdHandler = std::function<void(const u_char *)>;
+    using MdHandler = std::function<bool(const u_char *)>;
 
     explicit MdPreprocessor(MdHandler handler) : md_handler_(handler)
     {
+    }
+
+    ~MdPreprocessor()
+    {
+        for (const auto &kv : cache_)
+        {
+            for (const auto &kv2 : kv.second)
+            {
+                std::cerr << "WARN: unprocessed message with seq id " << kv2.first << " in " << kv.first << " channel" << '\n';
+            }
+        }
     }
 
     // feed in a new udp packet
@@ -76,13 +89,20 @@ public:
         }
 
         // uncompress if needed
-        const u_char *raw_md = uncompress_message(message);
+        // PayloadHeader and MessageHeader is dropped after this function
+        const u_char *raw_md = uncompress_message(message + sizeof(PayloadHeader));
         if (raw_md == nullptr)
         {
             return 0;
         }
 
-        md_handler_(raw_md);
+        if (md_handler_(raw_md) == false)
+        {
+            // somehow the handling failed, print the payload
+            std::cout << "failed to handle message: ";
+            md::print_hex_array(udp_payload, sizeof(PayloadHeader) + sizeof(MessageHeader) + 64);
+            return 0;
+        }
         return 1;
     }
 
@@ -98,13 +118,15 @@ public:
         auto *payload = reinterpret_cast<const PayloadHeader *>(data);
         if (payload->total_packet_number() == 1)
         {
-            return data + sizeof(PayloadHeader);
+            return data;
         }
 
         // it is splitted in several packets
         save_to_cache(payload);
 
-        return construct_message(cache_[payload->channel_id()], payload->sequence_id());
+        const u_char *concat_message = construct_message(cache_[payload->channel_id()], payload->sequence_id());
+
+        return concat_message;
     }
 
     const u_char *uncompress_message(const u_char *message)
@@ -154,6 +176,7 @@ private:
         {
             std::cerr << "packet size too big: " << payload->body_size() << '\n';
             std::cerr << "sequence id: " << payload->sequence_id() << '\n';
+            md::print_hex_array(reinterpret_cast<const u_char *>(payload), 128);
         }
 
         auto &per_channel_cache = cache_[payload->channel_id()];
