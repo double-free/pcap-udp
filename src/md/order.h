@@ -16,5 +16,11 @@ namespace md
         char side;
         int64_t be_transaction_time;
         char order_type;
+
+        uint16_t channel_no() const { return be16toh(be_channel_no); }
+        uint64_t appl_seq_num() const { return be64toh(be_appl_seq_num); }
+        int64_t price() const { return be64toh(be_price); }
+        int64_t quantity() const { return be64toh(be_quantity); }
+        int64_t transaction_time() const { return be64toh(be_transaction_time); }
     };
 }

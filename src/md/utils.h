@@ -7,7 +7,7 @@
 
 namespace md
 {
-    void print_hex_array(const u_char *buf, size_t len)
+    inline void print_hex_array(const u_char *buf, size_t len)
     {
         for (uint32_t i = 0; i < len; i++)
         {
@@ -17,7 +17,7 @@ namespace md
         std::cout << std::resetiosflags(std::ios_base::basefield);
     }
 
-    std::string bytes_to_str(const char bytes[], int len)
+    inline std::string bytes_to_str(const char bytes[], int len)
     {
         if (len == 0)
         {

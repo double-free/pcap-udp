@@ -9,6 +9,8 @@ namespace md
         Snapshot = 300111,
         Trade = 300191,
         Order = 300192,
+        Heartbeat = 390095,
+        SnapshotStats = 390090,
     };
 
     struct __attribute__((packed)) MdHeader
