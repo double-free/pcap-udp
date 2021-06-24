@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <string>
 #include <cstring>
+#include <sstream>
 
 namespace md
 {
@@ -36,5 +37,23 @@ namespace md
         memcpy(buffer, bytes, idx + 1);
         buffer[idx + 1] = '\0';
         return std::string(buffer);
+    }
+
+    inline std::string timestamp_to_string(int64_t ts)
+    {
+        int millis = ts % 1000;
+        ts /= 1000;
+        int seconds = ts % 100;
+        ts /= 100;
+        int minutes = ts % 100;
+        ts /= 100;
+        int hours = ts % 100;
+
+        std::stringstream ss;
+        ss << std::setfill('0') << std::setw(2);
+        ss << hours << ':' << minutes << ':' << seconds << '.';
+        ss << std::setw(3);
+        ss << millis;
+        return ss.str();
     }
 }

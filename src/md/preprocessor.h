@@ -49,6 +49,16 @@ struct __attribute__((packed)) MessageHeader
     {
         return be_compressed == 0x0001;
     }
+
+    uint32_t size_before_compress() const
+    {
+        return be32toh(be_size_before_compress);
+    }
+
+    uint32_t size_after_compress() const
+    {
+        return be32toh(be_size_after_compress);
+    }
 };
 
 // preprocessor of market data
@@ -59,7 +69,7 @@ struct __attribute__((packed)) MessageHeader
 class MdPreprocessor
 {
 public:
-    using MdHandler = std::function<void(const u_char *)>;
+    using MdHandler = std::function<void(const u_char *, uint32_t)>;
 
     explicit MdPreprocessor(MdHandler handler) : md_handler_(handler)
     {
@@ -71,7 +81,8 @@ public:
         {
             for (const auto &kv2 : kv.second)
             {
-                std::cerr << "WARN: unprocessed message with seq id " << kv2.first << " in " << kv.first << " channel" << '\n';
+                std::cerr << "WARN: unprocessed message with seq id "
+                          << kv2.first << " in " << kv.first << " channel" << std::endl;
             }
         }
     }

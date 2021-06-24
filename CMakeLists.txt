@@ -22,5 +22,6 @@ else()
     # MSVC, On by default (if available)
 endif()
 
-add_executable( ${PROJECT_NAME} src/main.cpp src/md/preprocessor.cpp)
+add_executable( ${PROJECT_NAME} src/main.cpp src/csv/writer.cpp 
+                src/md/preprocessor.cpp src/md/snapshot.cpp)
 target_link_libraries( ${PROJECT_NAME} pcap z )

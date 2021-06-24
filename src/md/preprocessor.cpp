@@ -20,8 +20,13 @@ int MdPreprocessor::process(const u_char *udp_payload)
         return 0;
     }
 
-    md_handler_(raw_md);
+    const MessageHeader *header = reinterpret_cast<const MessageHeader *>(message);
 
+    // Debug
+    // std::cout << "try to handle message with size " << header->size_before_compress() << ": ";
+    // print_hex_array(raw_md, header->size_before_compress());
+
+    md_handler_(raw_md, header->size_before_compress());
     return 1;
 }
 
@@ -64,13 +69,14 @@ const u_char *MdPreprocessor::uncompress_message(const u_char *message)
     }
 
     // uncompress
-    size_t decompressed_size = be32toh(header->be_size_before_compress);
+    size_t decompressed_size = header->size_before_compress();
 
     // TODO: avoid allocating in critical path
     decompressed_message_.reset(new u_char[decompressed_size]);
 
-    int result = uncompress(decompressed_message_.get(), &decompressed_size, message + sizeof(MessageHeader), be32toh(header->be_size_after_compress));
-    assert(decompressed_size == be32toh(header->be_size_before_compress));
+    int result = uncompress(decompressed_message_.get(), &decompressed_size, message + sizeof(MessageHeader), header->size_after_compress());
+    assert(decompressed_size == header->size_before_compress());
+
     if (result != Z_OK)
     {
         std::cerr << "uncompress failed with code " << result << ", skip this message" << '\n';

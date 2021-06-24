@@ -5,6 +5,19 @@
 #include <pcap.h>
 #include <stdexcept>
 
+/*
+struct timeval
+{
+　　long tv_sec;  // seconds since epoch
+　　long tv_usec; // micro seconds
+}
+*/
+
+uint64_t get_pcap_timestamp(const pcap_pkthdr &header)
+{
+  return header.ts.tv_sec * 1000000 + header.ts.tv_usec;
+}
+
 class PcapReader
 {
 public:
@@ -36,6 +49,16 @@ public:
 
   ~PcapReader() { pcap_close(file_); }
 
+  const pcap_pkthdr &pcap_header() const
+  {
+    return header_;
+  }
+
+  const uint64_t pcap_packet_index() const
+  {
+    return pcap_packet_index_;
+  }
+
   // try to extract some data from pcap packet
   // return null if no pcap packet remaining
   const u_char *extract_from_pcap_packet(PacketHandler extractor)
@@ -49,6 +72,7 @@ public:
         // no more pcap packet
         return nullptr;
       }
+      ++pcap_packet_index_;
       data = extractor(header_, next_packet);
     }
     assert(data);
@@ -58,5 +82,6 @@ public:
 private:
   pcap_t *file_;
   pcap_pkthdr header_;
+  uint64_t pcap_packet_index_;
   char errbuf_[PCAP_ERRBUF_SIZE];
 };
