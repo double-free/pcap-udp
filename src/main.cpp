@@ -6,12 +6,38 @@
 
 #include <iostream>
 
+bool is_valid_packet(const u_char *udp_packet)
+{
+  const auto *udp_header = reinterpret_cast<const udphdr *>(udp_packet);
+
+  uint16_t length = ntohs(udp_header->len);
+
+  // we always assume this is a market data packet
+  const auto *payload_header =
+      reinterpret_cast<const md::PayloadHeader *>(udp_packet + sizeof(udphdr));
+
+  if (length == payload_header->body_size() + sizeof(udphdr) + sizeof(md::PayloadHeader))
+  {
+    return true;
+  }
+  std::cout << "source port: " << ntohs(udp_header->source)
+            << ", dest port: " << ntohs(udp_header->dest)
+            << ", length: " << length << std::endl;
+  md::print_hex_array(udp_packet, length);
+  return false;
+}
+
 int main(int argc, char const *argv[])
 {
-  if (argc != 2)
+  if (argc < 2)
   {
-    std::cerr << "Usage: " << argv[0] << "<pcap file>" << '\n';
+    std::cerr << "Usage: " << argv[0] << "<pcap file> <output prefix>" << '\n';
     return 1;
+  }
+  
+  std::string output_prefix("md");
+  if (argc >= 3) {
+    output_prefix = std::string(argv[2]);
   }
 
   auto reader = PcapReader(argv[1]);
@@ -28,9 +54,10 @@ int main(int argc, char const *argv[])
   std::string snapshot_header = R"(ms,clock,threadId,clockAtArrival,sequenceNo,source,StockID,exchange,time,cum_volume,cum_amount,close,__origTickSeq,)"
                                 R"(bid1p,bid2p,bid3p,bid4p,bid5p,bid1q,bid2q,bid3q,bid4q,bid5q,ask1p,ask2p,ask3p,ask4p,ask5p,ask1q,ask2q,ask3q,ask4q,ask5q,)"
                                 R"(openPrice,numTrades)";
-  csv::Writer order_writer("md_order.csv", order_header);
-  csv::Writer trade_writer("md_trade.csv", trade_header);
-  csv::Writer snapshot_writer("md_snapshot.csv", snapshot_header);
+
+  csv::Writer order_writer(output_prefix + "_order.csv", order_header);
+  csv::Writer trade_writer(output_prefix + "_trade.csv", trade_header);
+  csv::Writer snapshot_writer(output_prefix + "_snapshot.csv", snapshot_header);
 
   std::map<md::MessageType, int> unhandled_message_count;
   auto md_handler = [&reader, &order_writer, &trade_writer, &snapshot_writer, &unhandled_message_count](const u_char *data, uint32_t data_len)
@@ -79,19 +106,20 @@ int main(int argc, char const *argv[])
     }
   };
 
-  MdPreprocessor processor(md_handler);
+  md::MdPreprocessor processor(md_handler);
 
   // processed message count
   int count = 0;
-  const u_char *udp_payload = nullptr;
+
+  const u_char *udp_packet = nullptr;
   do
   {
-    udp_payload = reader.extract_from_pcap_packet(extract_udp_payload);
-    if (udp_payload != nullptr)
+    udp_packet = reader.extract_from_pcap_packet(extract_udp_packet);
+    if (udp_packet != nullptr && is_valid_packet(udp_packet))
     {
-      count += processor.process(udp_payload);
+      count += processor.process(udp_packet + sizeof(udphdr));
     }
-  } while (udp_payload != nullptr);
+  } while (udp_packet != nullptr);
 
   for (const auto &kv : unhandled_message_count)
   {

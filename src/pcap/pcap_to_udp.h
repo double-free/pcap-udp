@@ -9,8 +9,11 @@
 
 #include <iostream>
 
-const u_char *extract_udp_payload(const pcap_pkthdr &header,
-                                  const u_char *packet)
+// Debug
+#include "../md/utils.h"
+
+const u_char *extract_udp_packet(const pcap_pkthdr &header,
+                                 const u_char *packet)
 {
   auto *ethernet_header = reinterpret_cast<const ether_header *>(packet);
   if (ntohs(ethernet_header->ether_type) != ETHERTYPE_IP)
@@ -26,14 +29,7 @@ const u_char *extract_udp_payload(const pcap_pkthdr &header,
     return nullptr;
   }
 
-  auto *udp_header = reinterpret_cast<const udphdr *>(
-      packet + sizeof(ether_header) + sizeof(ip));
+  auto *udp_header = packet + sizeof(ether_header) + sizeof(ip);
 
-  // std::cout << "source port: " << ntohs(udp_header->source)
-  //           << ", dest port: " << ntohs(udp_header->dest)
-  //           << ", length: " << ntohs(udp_header->len) << std::endl;
-
-  auto *udp_payload =
-      reinterpret_cast<const u_char *>(udp_header) + sizeof(udphdr);
-  return udp_payload;
+  return udp_header;
 }
