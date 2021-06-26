@@ -12,15 +12,15 @@
 #include <zlib.h>
 
 namespace md {
-struct __attribute__((packed)) PayloadHeader {
-  uint64_t be_sequence_id;
+struct __attribute__((packed)) UdpPayload {
+  int64_t be_sequence_id;
   uint32_t be_channel_id;
   uint16_t be_total_packet_number;
   uint16_t be_initial_packet_index;
   uint16_t be_current_packet_index;
   uint32_t be_body_size;
 
-  uint64_t sequence_id() const { return be64toh(be_sequence_id); }
+  int64_t sequence_id() const { return be64toh(be_sequence_id); }
   uint32_t channel_id() const { return be32toh(be_channel_id); }
   uint16_t total_packet_number() const {
     return be16toh(be_total_packet_number);
@@ -32,9 +32,13 @@ struct __attribute__((packed)) PayloadHeader {
     return be16toh(be_current_packet_index);
   }
   uint32_t body_size() const { return be32toh(be_body_size); }
+
+  const u_char *body() const {
+    return reinterpret_cast<const u_char *>(this) + sizeof(*this);
+  }
 };
 
-struct __attribute__((packed)) MessageHeader {
+struct __attribute__((packed)) Message {
   uint32_t unknown_number; // 0x00640000
   uint16_t be_compressed;
   uint32_t be_size_before_compress;
@@ -49,6 +53,10 @@ struct __attribute__((packed)) MessageHeader {
 
   uint32_t size_after_compress() const {
     return be32toh(be_size_after_compress);
+  }
+
+  const u_char *body() const {
+    return reinterpret_cast<const u_char *>(this) + sizeof(*this);
   }
 };
 
@@ -82,15 +90,26 @@ private:
   std::unique_ptr<u_char[]> raw_data_;
 };
 
-class Cache {
+// for every channel, the cache works to:
+//  1. construct message from udp packets
+//  2. drop outdated/duplicated udp packet
+class MessageManager {
 public:
-  void save(const PayloadHeader *payload);
-  std::unique_ptr<const u_char[]> construct_message(uint64_t seq_id);
-  uint64_t get_last_seq_id() const { return last_seq_id_; }
+  // this is used as a "fast path" for the most common case:
+  // we get the "next" packet with a "whole" message
+  bool fast_path(const UdpPayload &payload) const;
+
+  void store(const UdpPayload &payload);
+  std::unique_ptr<const u_char[]> construct_message(int64_t seq_id);
+  int64_t get_last_seq_id() const { return last_seq_id_; }
+  void set_last_seq_id(int64_t seq_id) { last_seq_id_ = seq_id; }
 
 private:
-  uint64_t last_seq_id_{0};
-  std::map<uint64_t, Buffer> storage_;
+  const Message *next_message{nullptr};
+
+  // this is set to the latest "processed" message, -1 means no previous message
+  int64_t last_seq_id_{-1};
+  std::map<int64_t, Buffer> storage_;
 };
 
 // preprocessor of market data
@@ -108,19 +127,14 @@ public:
   // return the message processed
   int process(const u_char *udp_payload);
 
-  // return the message constructed after receiving the data
-  // can be null
-  const u_char *try_to_construct_message(const u_char *data);
-
-  const u_char *uncompress_message(const u_char *message);
-
 private:
   MdHandler md_handler_;
 
   // we need to hold these message until next comes
   std::unique_ptr<u_char[]> decompressed_message_;
-  std::unique_ptr<const u_char[]> concatenated_message_;
+  const u_char *uncompress_message(const Message &message);
 
-  std::map<uint32_t, Cache> cache_;
+  // for each channel, there is a message manager
+  std::map<uint32_t, MessageManager> msg_managers_;
 };
 } // namespace md

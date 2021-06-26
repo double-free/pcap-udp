@@ -25,10 +25,10 @@ bool is_valid_packet(const u_char *udp_packet) {
 
   // we always assume this is a market data packet
   const auto *payload_header =
-      reinterpret_cast<const md::PayloadHeader *>(udp_packet + sizeof(udphdr));
+      reinterpret_cast<const md::UdpPayload *>(udp_packet + sizeof(udphdr));
 
-  if (length == payload_header->body_size() + sizeof(udphdr) +
-                    sizeof(md::PayloadHeader)) {
+  if (length ==
+      payload_header->body_size() + sizeof(udphdr) + sizeof(md::UdpPayload)) {
     return true;
   }
   std::cout << "source port: " << ntohs(udp_header->source)
@@ -50,7 +50,8 @@ int main(int argc, char const *argv[]) {
 
   auto reader = PcapReader(argv[1]);
   // TODO: hard-coded address filter
-  if (reader.set_filter("net 172.27.129") != 0) {
+  // arbitrate between two feeds
+  if (reader.set_filter("net 172.27.129 or net 172.27.1") != 0) {
     std::cerr << "set filter failed" << '\n';
     return 2;
   }
