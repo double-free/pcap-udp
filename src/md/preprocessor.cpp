@@ -116,12 +116,21 @@ bool MessageManager::fast_path(const UdpPayload &payload) const {
 }
 
 void MessageManager::store(const UdpPayload &payload) {
+  if (last_seq_id_ == -1) {
+    // there's no previous message, take this message as the previous one
+    // NOTE: we skip this message because we can't guarantee that we can receive
+    // all pieces of it
+    last_seq_id_ = payload.sequence_id();
+    return;
+  }
+
   if (payload.sequence_id() > last_seq_id_ + 1) {
-    std::cout << "store an out of sequence packet with seq: "
+    std::cout << "channel " << payload.channel_id()
+              << " stores an out of sequence packet with seq: "
               << payload.sequence_id() << ", current seq: " << last_seq_id_
               << '\n';
     print_hex_array(reinterpret_cast<const u_char *>(&payload),
-                    sizeof(UdpPayload) + sizeof(payload.body_size()));
+                    sizeof(UdpPayload) + payload.body_size());
   }
 
   if (storage_.find(payload.sequence_id()) == storage_.end()) {

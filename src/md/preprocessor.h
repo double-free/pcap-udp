@@ -105,8 +105,6 @@ public:
   void set_last_seq_id(int64_t seq_id) { last_seq_id_ = seq_id; }
 
 private:
-  const Message *next_message{nullptr};
-
   // this is set to the latest "processed" message, -1 means no previous message
   int64_t last_seq_id_{-1};
   std::map<int64_t, Buffer> storage_;
