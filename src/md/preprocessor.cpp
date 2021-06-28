@@ -11,54 +11,25 @@ int MdPreprocessor::process(const u_char *udp_data) {
 
   auto &msg_manager = msg_managers_[payload.channel_id()];
 
-  if (payload.sequence_id() <= msg_manager.get_last_seq_id()) {
-    // outdated packet
+  msg_manager.handle(payload);
+
+  const Message *msg = msg_manager.consume_message(payload.sequence_id());
+  if (msg == nullptr) {
     return 0;
   }
 
-  auto process_message = [this, &msg_manager](const Message &msg,
-                                              int64_t seq_id) -> int {
-    const u_char *raw_md = uncompress_message(msg);
-    if (raw_md == 0) {
-      return 0;
-    }
-
-    // Debug
-    // std::cout << "handle market data with size " <<
-    // msg.size_before_compress() << ": ";
-    // print_hex_array(raw_md, msg.size_before_compress());
-
-    md_handler_(raw_md, msg.size_before_compress());
-    msg_manager.set_last_seq_id(seq_id);
-    return 1;
-  };
-
-  int processed_message_count = 0;
-  if (msg_manager.fast_path(payload) == true) {
-    // the simplest case that we don't need to copy anything
-    const auto &msg = *reinterpret_cast<const Message *>(payload.body());
-    processed_message_count += process_message(msg, payload.sequence_id());
-    // we don't return here,
-    // because it may have some following data to process in cache
-  } else {
-    // store it in cache
-    msg_manager.store(payload);
+  const u_char *raw_md = uncompress_message(*msg);
+  if (raw_md == 0) {
+    return 0;
   }
 
-  // check if there's anything to process in cache
-  std::unique_ptr<char[]> maybe_msg;
-  do {
-    int64_t next_seq_id = msg_manager.get_last_seq_id() + 1;
-    std::unique_ptr<const u_char[]> maybe_msg =
-        msg_manager.construct_message(next_seq_id);
-    if (maybe_msg != nullptr) {
-      const auto &cached_msg =
-          *reinterpret_cast<const Message *>(maybe_msg.get());
-      processed_message_count += process_message(cached_msg, next_seq_id);
-    }
-  } while (maybe_msg != nullptr);
+  // Debug
+  // std::cout << "handle market data with size " << msg->size_before_compress()
+  //           << ": ";
+  // print_hex_array(raw_md, msg->size_before_compress());
 
-  return processed_message_count;
+  md_handler_(raw_md, msg->size_before_compress());
+  return 1;
 }
 
 const u_char *MdPreprocessor::uncompress_message(const Message &message) {
@@ -101,38 +72,39 @@ void Buffer::fill(uint16_t packet_index, const u_char *src, uint32_t length) {
   filled_[packet_index] = true;
 }
 
-bool MessageManager::fast_path(const UdpPayload &payload) const {
-  if (payload.total_packet_number() != 1) {
-    return false;
-  }
-
-  if (last_seq_id_ == -1 || payload.sequence_id() == last_seq_id_ + 1) {
-    // we get the "next" packet with a "whole" message
-    return true;
-  }
-
-  // received a late sequence and needs wait for the previous one
-  return false;
-}
-
-void MessageManager::store(const UdpPayload &payload) {
-  if (last_seq_id_ == -1) {
-    // there's no previous message, take this message as the previous one
-    // NOTE: we skip this message because we can't guarantee that we can receive
-    // all pieces of it
-    last_seq_id_ = payload.sequence_id();
-    return;
-  }
-
-  if (payload.sequence_id() > last_seq_id_ + 1) {
-    std::cout << "channel " << payload.channel_id()
-              << " stores an out of sequence packet with seq: "
+bool MessageManager::handle(const UdpPayload &payload) {
+  if (payload.sequence_id() <= last_seq_id_) {
+    // outdated, drop it
+    std::cerr << "channel " << payload.channel_id()
+              << " dropped a outdated packet with seq: "
               << payload.sequence_id() << ", current seq: " << last_seq_id_
               << '\n';
     print_hex_array(reinterpret_cast<const u_char *>(&payload),
                     sizeof(UdpPayload) + payload.body_size());
+    return false;
   }
 
+  // seq gap, print a warn and ignore
+  if (payload.sequence_id() > last_seq_id_ + 1) {
+    std::cerr << "channel " << payload.channel_id()
+              << " gets seq gap in packet with seq: " << payload.sequence_id()
+              << ", current seq: " << last_seq_id_ << '\n';
+    print_hex_array(reinterpret_cast<const u_char *>(&payload),
+                    sizeof(UdpPayload) + payload.body_size());
+  }
+
+  if (payload.total_packet_number() != 1) {
+    store(payload);
+    return false;
+  }
+
+  // we get the "next" packet with a "whole" message
+  // set the pointer and wait for consume_message() call
+  realtime_msg_ = reinterpret_cast<const Message *>(payload.body());
+  return true;
+}
+
+void MessageManager::store(const UdpPayload &payload) {
   if (storage_.find(payload.sequence_id()) == storage_.end()) {
     storage_[payload.sequence_id()].reserve(payload.total_packet_number());
   }
@@ -144,8 +116,20 @@ void MessageManager::store(const UdpPayload &payload) {
                                        payload.body_size());
 }
 
-std::unique_ptr<const u_char[]>
-MessageManager::construct_message(int64_t seq_id) {
+// can be null
+// update last_seq_id_ if successfully consume a message
+const Message *MessageManager::consume_message(int64_t seq_id) {
+  if (realtime_msg_ != nullptr) {
+    last_seq_id_ = seq_id;
+    const auto *tmp = realtime_msg_;
+    // set realtime_msg_ to nullptr because we "consumed" it
+    // we do not own it so do not need to delete it
+    // it is a pointer to the original udp buffer
+    realtime_msg_ = nullptr;
+    return tmp;
+  }
+
+  // try to construct from cache
   if (storage_.find(seq_id) == storage_.end()) {
     return nullptr;
   }
@@ -154,8 +138,9 @@ MessageManager::construct_message(int64_t seq_id) {
     return nullptr;
   }
 
-  auto msg = storage_[seq_id].consume();
+  last_seq_id_ = seq_id;
+  cached_msg_ = storage_[seq_id].consume();
   // clear the entry
   storage_.erase(seq_id);
-  return msg;
+  return reinterpret_cast<const Message *>(cached_msg_.get());
 }

@@ -95,19 +95,21 @@ private:
 //  2. drop outdated/duplicated udp packet
 class MessageManager {
 public:
-  // this is used as a "fast path" for the most common case:
-  // we get the "next" packet with a "whole" message
-  bool fast_path(const UdpPayload &payload) const;
-
-  void store(const UdpPayload &payload);
-  std::unique_ptr<const u_char[]> construct_message(int64_t seq_id);
-  int64_t get_last_seq_id() const { return last_seq_id_; }
-  void set_last_seq_id(int64_t seq_id) { last_seq_id_ = seq_id; }
+  // returns whether the payload contains a new message
+  bool handle(const UdpPayload &payload);
+  const Message *consume_message(int64_t seq_id);
 
 private:
   // this is set to the latest "processed" message, -1 means no previous message
+  // we only drop outdated message, do nothing for out-ordered ones
   int64_t last_seq_id_{-1};
   std::map<int64_t, Buffer> storage_;
+  void store(const UdpPayload &payload);
+
+  // message from current packet, guaranteed to be a whole message or nullptr
+  const Message *realtime_msg_{nullptr};
+  // message constructed from storage
+  std::unique_ptr<u_char[]> cached_msg_;
 };
 
 // preprocessor of market data
