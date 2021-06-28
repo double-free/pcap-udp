@@ -1,4 +1,5 @@
 #include "writer.h"
+#include "../md/utils.h"
 
 using namespace csv;
 
@@ -34,7 +35,7 @@ void Writer::write_snapshot(const md::SnapshotWrapper &snapshot,
   // placeholders
   csv_file_ << "09:42:12.094767,1587606132095370,23994," << pcap_ts << ','
             << pcap_seq << ",24," << snapshot.security_id << ",SZ,"
-            << snapshot.orig_time << ','
+            << md::timestamp_to_string(snapshot.orig_time) << ','
             << snapshot.total_trade_volume / Writer::QUANTITY_MULT << ','
             << 1.0 * snapshot.total_trade_value / Writer::AMOUNT_MULT << ','
             << 1.0 * snapshot.latest_trade_price / Writer::MD_PRICE_MULT

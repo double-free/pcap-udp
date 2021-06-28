@@ -1,9 +1,12 @@
 #pragma once
 
+#include "udp_packet_processor.h"
+
 #include <cassert>
-#include <functional>
 #include <pcap.h>
 #include <stdexcept>
+
+// https://unix.superglobalmegacorp.com/Net2/newsrc/netinet/ip.h.html
 
 /*
 struct timeval
@@ -13,75 +16,42 @@ struct timeval
 }
 */
 
-uint64_t get_pcap_timestamp(const pcap_pkthdr &header)
-{
+uint64_t get_pcap_timestamp(const pcap_pkthdr &header) {
   return header.ts.tv_sec * 1000000 + header.ts.tv_usec;
 }
 
-class PcapReader
-{
+class PcapReader {
 public:
-  using PacketHandler =
-      std::function<const u_char *(const pcap_pkthdr &, const unsigned char *)>;
-
-  explicit PcapReader(std::string filename)
-  {
+  explicit PcapReader(std::string filename) {
     file_ = pcap_open_offline(filename.c_str(), errbuf_);
-    if (file_ == nullptr)
-    {
+    if (file_ == nullptr) {
       throw std::invalid_argument("invalid pcap file: " + filename);
     }
   }
 
-  int set_filter(const std::string &filter_str)
-  {
-    bpf_program filter;
-    int result =
-        pcap_compile(file_, &filter, filter_str.c_str(), 0 /*no optimize*/,
-                     PCAP_NETMASK_UNKNOWN /*capture any interface*/);
-    if (result != 0)
-    {
-      return result;
-    }
-    // apply filter
-    return pcap_setfilter(file_, &filter);
-  }
-
   ~PcapReader() { pcap_close(file_); }
 
-  const pcap_pkthdr &pcap_header() const
-  {
-    return header_;
+  int set_filter(const std::string &filter_str);
+
+  void add_processor(UdpPacketProcessor &processor) {
+    processors_.push_back(processor);
   }
 
-  const uint64_t pcap_packet_index() const
-  {
-    return pcap_packet_index_;
-  }
+  // return number of parsed packet, can be 0 or 1
+  int read_pcap_packet(const u_char *packet);
 
-  // try to extract some data from pcap packet
-  // return null if no pcap packet remaining
-  const u_char *extract_from_pcap_packet(PacketHandler extractor)
-  {
-    const u_char *data = nullptr;
-    while (data == nullptr)
-    {
-      const u_char *next_packet = pcap_next(file_, &header_);
-      if (next_packet == nullptr)
-      {
-        // no more pcap packet
-        return nullptr;
-      }
-      ++pcap_packet_index_;
-      data = extractor(header_, next_packet);
-    }
-    assert(data);
-    return data;
-  }
+  // loop until file ends, return how many packets parsed
+  int process();
+
+  const pcap_pkthdr &pcap_header() const { return header_; }
+  uint64_t udp_packet_index() const { return udp_packet_index_; }
 
 private:
   pcap_t *file_;
   pcap_pkthdr header_;
-  uint64_t pcap_packet_index_;
+  uint64_t udp_packet_index_{0};
   char errbuf_[PCAP_ERRBUF_SIZE];
+
+  // one procesor for one md feed
+  std::vector<UdpPacketProcessor &> processors_;
 };

@@ -3,11 +3,34 @@
 
 using namespace md;
 
-int MdPreprocessor::process(const u_char *udp_data) {
+bool is_valid_packet(const udphdr &udp_header, const u_char *udp_payload) {
+  uint16_t length = ntohs(udp_header.len);
+
+  // we always assume this is a market data packet
+  const auto *payload_header =
+      reinterpret_cast<const md::UdpPayload *>(udp_payload);
+
+  if (length ==
+      payload_header->body_size() + sizeof(udphdr) + sizeof(md::UdpPayload)) {
+    return true;
+  }
+  std::cerr << "find a udp packet does not match our protocol, source port: "
+            << ntohs(udp_header->source)
+            << ", dest port: " << ntohs(udp_header->dest)
+            << ", length: " << length << std::endl;
+  md::print_hex_array(udp_packet, length);
+  return false;
+}
+
+void MdPreprocessor::process(const udphdr &udp_header,
+                             const u_char *udp_payload) override {
 
   assert(udp_data != nullptr);
+  if (is_valid_packet(udp_header, udp_payload) == false) {
+    return;
+  }
 
-  const auto &payload = *reinterpret_cast<const UdpPayload *>(udp_data);
+  const auto &payload = *reinterpret_cast<const UdpPayload *>(udp_payload);
 
   auto &msg_manager = msg_managers_[payload.channel_id()];
 
@@ -15,12 +38,12 @@ int MdPreprocessor::process(const u_char *udp_data) {
 
   const Message *msg = msg_manager.consume_message(payload.sequence_id());
   if (msg == nullptr) {
-    return 0;
+    return;
   }
 
   const u_char *raw_md = uncompress_message(*msg);
   if (raw_md == 0) {
-    return 0;
+    return;
   }
 
   // Debug
@@ -29,7 +52,6 @@ int MdPreprocessor::process(const u_char *udp_data) {
   // print_hex_array(raw_md, msg->size_before_compress());
 
   md_handler_(raw_md, msg->size_before_compress());
-  return 1;
 }
 
 const u_char *MdPreprocessor::uncompress_message(const Message &message) {

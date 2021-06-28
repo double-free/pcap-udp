@@ -1,6 +1,7 @@
+#include "md/arbitrator.h"
 #include "md/preprocessor.h"
+#include "md/utils.h"
 #include "pcap/pcap_reader.h"
-#include "pcap/pcap_to_udp.h"
 
 #include "csv/writer.h"
 
@@ -18,26 +19,6 @@ std::set<uint32_t> get_interested_stocks(std::string file) {
   return stock_ids;
 }
 
-bool is_valid_packet(const u_char *udp_packet) {
-  const auto *udp_header = reinterpret_cast<const udphdr *>(udp_packet);
-
-  uint16_t length = ntohs(udp_header->len);
-
-  // we always assume this is a market data packet
-  const auto *payload_header =
-      reinterpret_cast<const md::UdpPayload *>(udp_packet + sizeof(udphdr));
-
-  if (length ==
-      payload_header->body_size() + sizeof(udphdr) + sizeof(md::UdpPayload)) {
-    return true;
-  }
-  std::cout << "source port: " << ntohs(udp_header->source)
-            << ", dest port: " << ntohs(udp_header->dest)
-            << ", length: " << length << std::endl;
-  md::print_hex_array(udp_packet, length);
-  return false;
-}
-
 int main(int argc, char const *argv[]) {
   if (argc != 4) {
     std::cerr << "Usage: " << argv[0]
@@ -51,7 +32,9 @@ int main(int argc, char const *argv[]) {
   auto reader = PcapReader(argv[1]);
   // TODO: hard-coded address filter
   // arbitrate between two feeds
-  if (reader.set_filter("net 172.27.129") != 0) {
+  std::string net1("172.27.1");
+  std::string net2("172.27.129");
+  if (reader.set_filter("net " + net1 + " or net " + net2) != 0) {
     std::cerr << "set filter failed" << '\n';
     return 2;
   }
@@ -70,6 +53,8 @@ int main(int argc, char const *argv[]) {
   csv::Writer trade_writer(output_prefix + "_trade.csv", trade_header);
   csv::Writer snapshot_writer(output_prefix + "_snapshot.csv", snapshot_header);
   std::map<md::MessageType, int> unhandled_message_count;
+
+  md::MdArbitrator arbitrator;
   auto md_handler = [&](const u_char *data, uint32_t data_len) {
     md::PackedMarketData mds(data, data_len);
     // std::cout << "got message with length " << data_len << ": ";
@@ -80,39 +65,52 @@ int main(int argc, char const *argv[]) {
           reinterpret_cast<const u_char *>(header) + sizeof(md::MdHeader);
       switch (header->message_type()) {
       case md::MessageType::Order: {
-        const auto *order = reinterpret_cast<const md::Order *>(body);
+        const auto &order = *reinterpret_cast<const md::Order *>(body);
+        if (!arbitrator.record_order_or_trade(order.channel_no(),
+                                              order.appl_seq_num())) {
+          break;
+        }
         uint32_t stock_id = std::stoul(
-            md::bytes_to_str(order->security_id, sizeof(order->security_id)));
+            md::bytes_to_str(order.security_id, sizeof(order.security_id)));
         if (interested_stock_ids.find(stock_id) != interested_stock_ids.end()) {
-          order_writer.write_order(*order,
+          order_writer.write_order(order,
                                    get_pcap_timestamp(reader.pcap_header()),
-                                   reader.pcap_packet_index());
+                                   reader.udp_packet_index());
         }
 
         break;
       }
       case md::MessageType::Trade: {
-        const auto *trade = reinterpret_cast<const md::Trade *>(body);
+        const auto &trade = *reinterpret_cast<const md::Trade *>(body);
+
+        if (!arbitrator.record_order_or_trade(trade.channel_no(),
+                                              trade.appl_seq_num())) {
+          break;
+        }
         uint32_t stock_id = std::stoul(
-            md::bytes_to_str(trade->security_id, sizeof(trade->security_id)));
+            md::bytes_to_str(trade.security_id, sizeof(trade.security_id)));
         if (interested_stock_ids.find(stock_id) != interested_stock_ids.end()) {
-          trade_writer.write_trade(*trade,
+          trade_writer.write_trade(trade,
                                    get_pcap_timestamp(reader.pcap_header()),
-                                   reader.pcap_packet_index());
+                                   reader.udp_packet_index());
         }
 
         break;
       }
       case md::MessageType::Snapshot: {
-        md::SnapshotWrapper snapshot_wrapper; // max 10 levels
-        snapshot_wrapper.init(body);
+        md::SnapshotWrapper snapshot_wrapper(body); // max 10 levels
+        if (!arbitrator.record_snapshot(snapshot_wrapper.security_id,
+                                        snapshot_wrapper.orig_time)) {
+          break;
+        }
         uint32_t stock_id = std::stoul(snapshot_wrapper.security_id);
         if (interested_stock_ids.find(stock_id) != interested_stock_ids.end()) {
           // only write top 5 levels
+          snapshot_wrapper.init_md_entries();
           int depth = 5;
           snapshot_writer.write_snapshot(
               snapshot_wrapper, get_pcap_timestamp(reader.pcap_header()),
-              reader.pcap_packet_index(), depth);
+              reader.udp_packet_index(), depth);
         }
         break;
       }
@@ -130,24 +128,15 @@ int main(int argc, char const *argv[]) {
     }
   };
 
-  md::MdPreprocessor processor(md_handler);
-
-  // processed message count
-  int count = 0;
-
-  const u_char *udp_packet = nullptr;
-  do {
-    udp_packet = reader.extract_from_pcap_packet(extract_udp_packet);
-    if (udp_packet != nullptr && is_valid_packet(udp_packet)) {
-      count += processor.process(udp_packet + sizeof(udphdr));
-    }
-  } while (udp_packet != nullptr);
+  md::MdPreprocessor processor1(net1, md_handler);
+  md::MdPreprocessor processor2(net2, md_handler);
+  reader.add_processor(processor1);
+  reader.add_processor(processor2);
+  reader.process();
 
   for (const auto &kv : unhandled_message_count) {
     std::cerr << "unhandled message type: " << static_cast<uint32_t>(kv.first)
               << ", count: " << kv.second << '\n';
   }
-
-  std::cout << count << " packets in total." << std::endl;
   return 0;
 }

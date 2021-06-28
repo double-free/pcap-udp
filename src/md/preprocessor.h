@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../pcap/udp_packet_processor.h"
+
 #include <algorithm>
 #include <functional>
 #include <iostream>
@@ -116,15 +118,15 @@ private:
 // it mainly does two things:
 //  1. construct message from udp packets
 //  2. uncompress message if needed
-
-class MdPreprocessor {
+class MdPreprocessor : public UdpPacketProcessor {
 public:
   using MdHandler = std::function<void(const u_char *, uint32_t)>;
 
-  explicit MdPreprocessor(MdHandler handler) : md_handler_(handler) {}
+  MdPreprocessor(std::string netmask, MdHandler handler)
+      : UdpPacketProcessor(netmask), md_handler_(handler) {}
 
-  // return the message processed
-  int process(const u_char *udp_payload);
+  // override UdpPacketProcessor::process
+  void process(const udphdr &udp_header, const u_char *udp_payload) override;
 
 private:
   MdHandler md_handler_;
