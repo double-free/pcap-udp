@@ -22,6 +22,12 @@ int MdPreprocessor::process(const u_char *udp_data) {
     if (raw_md == 0) {
       return 0;
     }
+
+    // Debug
+    // std::cout << "handle market data with size " <<
+    // msg.size_before_compress() << ": ";
+    // print_hex_array(raw_md, msg.size_before_compress());
+
     md_handler_(raw_md, msg.size_before_compress());
     msg_manager.set_last_seq_id(seq_id);
     return 1;
@@ -46,8 +52,9 @@ int MdPreprocessor::process(const u_char *udp_data) {
     std::unique_ptr<const u_char[]> maybe_msg =
         msg_manager.construct_message(next_seq_id);
     if (maybe_msg != nullptr) {
-      const auto &msg = *reinterpret_cast<const Message *>(maybe_msg.get());
-      processed_message_count += process_message(msg, next_seq_id);
+      const auto &cached_msg =
+          *reinterpret_cast<const Message *>(maybe_msg.get());
+      processed_message_count += process_message(cached_msg, next_seq_id);
     }
   } while (maybe_msg != nullptr);
 
@@ -123,7 +130,6 @@ void MessageManager::store(const UdpPayload &payload) {
 
   uint32_t packet_index =
       payload.current_packet_index() + payload.initial_packet_index();
-
   // copy to make sure message staying valid
   storage_[payload.sequence_id()].fill(packet_index, payload.body(),
                                        payload.body_size());
@@ -139,5 +145,8 @@ MessageManager::construct_message(int64_t seq_id) {
     return nullptr;
   }
 
-  return storage_[seq_id].consume();
+  auto msg = storage_[seq_id].consume();
+  // clear the entry
+  storage_.erase(seq_id);
+  return msg;
 }

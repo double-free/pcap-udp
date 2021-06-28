@@ -41,7 +41,7 @@ bool is_valid_packet(const u_char *udp_packet) {
 int main(int argc, char const *argv[]) {
   if (argc != 4) {
     std::cerr << "Usage: " << argv[0]
-              << "<pcap file> <stock filter> <output prefix>" << '\n';
+              << " <pcap file> <stock filter> <output prefix>" << '\n';
     return 1;
   }
 
@@ -51,7 +51,7 @@ int main(int argc, char const *argv[]) {
   auto reader = PcapReader(argv[1]);
   // TODO: hard-coded address filter
   // arbitrate between two feeds
-  if (reader.set_filter("net 172.27.129 or net 172.27.1") != 0) {
+  if (reader.set_filter("net 172.27.129") != 0) {
     std::cerr << "set filter failed" << '\n';
     return 2;
   }

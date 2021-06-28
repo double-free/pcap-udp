@@ -81,7 +81,7 @@ public:
 
   std::unique_ptr<u_char[]> consume() {
     assert(full());
-    // std::move is needed because it is not a stack object
+    // std::move is needed because it lives longer than the scope
     return std::move(raw_data_);
   }
 
@@ -90,7 +90,7 @@ private:
   std::unique_ptr<u_char[]> raw_data_;
 };
 
-// for every channel, the cache works to:
+// for every channel, the manager works to:
 //  1. construct message from udp packets
 //  2. drop outdated/duplicated udp packet
 class MessageManager {
