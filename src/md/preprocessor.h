@@ -123,7 +123,6 @@ public:
 
   explicit MdPreprocessor(MdHandler handler) : md_handler_(handler) {}
 
-  // feed in a new udp packet
   // return the message processed
   int process(const u_char *udp_payload);
 
