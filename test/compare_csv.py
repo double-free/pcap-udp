@@ -34,9 +34,11 @@ def in_gap(bench_line) -> bool:
     # needs to be very precise
     if 1587611459.732 < timestamp / 1e6 < 1587611459.794:
         return True
+    if 1587611460.094 < timestamp / 1e6 < 1587611460.704:
+        return True
     return False
 
-def compare(file, benchmark, comparator, max_err=1) -> bool:
+def compare(file, benchmark, comparator, max_err=1000) -> bool:
     # may be out of order, so the compare shall between two containers
     # each container holds the recent n record
     my_recent_lines = []
@@ -64,10 +66,16 @@ def compare(file, benchmark, comparator, max_err=1) -> bool:
             next(bench_reader)
             my_cached_lines = []
             bench_cached_lines = []
+
+            prev_check_point = 0
             for idx, bench_line in enumerate(bench_reader):
+                if idx - prev_check_point == 100000:
+                    print(f"check point, line {idx}: {bench_line}")
+                    prev_check_point = idx
+
                 # very ugly workaround
-                # if in_gap(bench_line):
-                #     continue
+                if in_gap(bench_line):
+                    continue
 
                 my_line = next(my_reader)
                 if comparator(my_line, bench_line) == True:
@@ -108,3 +116,4 @@ if __name__ == "__main__":
         exit(1)
 
     result = compare(args.file, args.benchmark, m[args.mode])
+    print(result)
