@@ -1,5 +1,13 @@
 #include "pcap_reader.h"
 
+// network
+#include <iostream>
+#include <net/if.h>
+#include <netinet/if_ether.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/udp.h>
+
 int PcapReader::set_filter(const std::string &filter_str) {
   bpf_program filter;
   int result =
@@ -28,20 +36,22 @@ int PcapReader::read_pcap_packet(const u_char *packet) {
   udp_packet_index_ += 1;
 
   for (auto &processor : processors_) {
-    if (processor.match(ip_header->ip_src)) {
+    if (processor->match(ip_header->ip_src)) {
       const u_char *udp_header = packet + sizeof(ether_header) + sizeof(ip);
-      processor.process(*reinterpret_cast<const udphdr *>(udp_header),
-                        udp_header + sizeof(udphdr));
+      processor->process(*reinterpret_cast<const udphdr *>(udp_header),
+                         udp_header + sizeof(udphdr));
       return 1;
     }
   }
   // does not match any processor
+  std::cout << inet_ntoa(ip_header->ip_src) << " does not match\n";
   return 0;
 }
 
 int PcapReader::process() {
   int processed_count = 0;
-  for (u_char *next_packet = pcap_next(file_, &header_); next_packet != nullptr; next_packet = pcap_next(file_, &header_) {
+  for (const u_char *next_packet = pcap_next(file_, &header_);
+       next_packet != nullptr; next_packet = pcap_next(file_, &header_)) {
     processed_count += read_pcap_packet(next_packet);
   }
   return processed_count;

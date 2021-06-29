@@ -5,9 +5,7 @@
 #include <cassert>
 #include <pcap.h>
 #include <stdexcept>
-
-// https://unix.superglobalmegacorp.com/Net2/newsrc/netinet/ip.h.html
-
+#include <vector>
 /*
 struct timeval
 {
@@ -16,7 +14,7 @@ struct timeval
 }
 */
 
-uint64_t get_pcap_timestamp(const pcap_pkthdr &header) {
+inline uint64_t get_pcap_timestamp(const pcap_pkthdr &header) {
   return header.ts.tv_sec * 1000000 + header.ts.tv_usec;
 }
 
@@ -33,7 +31,7 @@ public:
 
   int set_filter(const std::string &filter_str);
 
-  void add_processor(UdpPacketProcessor &processor) {
+  void add_processor(UdpPacketProcessor *processor) {
     processors_.push_back(processor);
   }
 
@@ -44,14 +42,15 @@ public:
   int process();
 
   const pcap_pkthdr &pcap_header() const { return header_; }
+
   uint64_t udp_packet_index() const { return udp_packet_index_; }
 
 private:
   pcap_t *file_;
   pcap_pkthdr header_;
-  uint64_t udp_packet_index_{0};
+  uint64_t udp_packet_index_;
   char errbuf_[PCAP_ERRBUF_SIZE];
 
   // one procesor for one md feed
-  std::vector<UdpPacketProcessor &> processors_;
+  std::vector<UdpPacketProcessor *> processors_;
 };

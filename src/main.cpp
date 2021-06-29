@@ -30,14 +30,7 @@ int main(int argc, char const *argv[]) {
   std::string output_prefix = std::string(argv[3]);
 
   auto reader = PcapReader(argv[1]);
-  // TODO: hard-coded address filter
-  // arbitrate between two feeds
-  std::string net1("172.27.1");
-  std::string net2("172.27.129");
-  if (reader.set_filter("net " + net1 + " or net " + net2) != 0) {
-    std::cerr << "set filter failed" << '\n';
-    return 2;
-  }
+
   std::string order_header =
       R"(clockAtArrival,sequenceNo,exchId,securityType,__isRepeated,TransactTime,ChannelNo,ApplSeqNum,SecurityID,secid,mdSource,)"
       R"(Side,OrderType,__origTickSeq,Price,OrderQty)";
@@ -128,12 +121,22 @@ int main(int argc, char const *argv[]) {
     }
   };
 
-  md::MdPreprocessor processor1(net1, md_handler);
-  md::MdPreprocessor processor2(net2, md_handler);
-  reader.add_processor(processor1);
-  reader.add_processor(processor2);
-  reader.process();
+  // TODO: hard-coded address filter
+  // arbitrate between two feeds
+  std::string net1("172.27.1");
+  std::string net2("172.27.129");
+  if (reader.set_filter("net " + net1 + " or net " + net2) != 0) {
+    std::cerr << "set filter failed" << '\n';
+    return 2;
+  }
+  std::string netmask("255.255.255.0");
+  md::MdPreprocessor processor1(net1 + ".0", netmask, md_handler);
+  md::MdPreprocessor processor2(net2 + ".0", netmask, md_handler);
+  reader.add_processor(&processor1);
+  reader.add_processor(&processor2);
+  int udp_packet_count = reader.process();
 
+  std::cout << udp_packet_count << " udp packets processed\n";
   for (const auto &kv : unhandled_message_count) {
     std::cerr << "unhandled message type: " << static_cast<uint32_t>(kv.first)
               << ", count: " << kv.second << '\n';

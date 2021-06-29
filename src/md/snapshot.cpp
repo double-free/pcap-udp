@@ -19,7 +19,7 @@ SnapshotWrapper::SnapshotWrapper(const u_char *raw_data) {
 }
 
 void SnapshotWrapper::init_md_entries() {
-  assert(raw_data != nullptr);
+  assert(header_ != nullptr);
   const u_char *entries =
       reinterpret_cast<const u_char *>(header_) + sizeof(SnapshotHeader);
   for (uint32_t i = 0; i < header_->md_entry_num(); i++) {

@@ -15,17 +15,17 @@ bool is_valid_packet(const udphdr &udp_header, const u_char *udp_payload) {
     return true;
   }
   std::cerr << "find a udp packet does not match our protocol, source port: "
-            << ntohs(udp_header->source)
-            << ", dest port: " << ntohs(udp_header->dest)
+            << ntohs(udp_header.source)
+            << ", dest port: " << ntohs(udp_header.dest)
             << ", length: " << length << std::endl;
-  md::print_hex_array(udp_packet, length);
+  md::print_hex_array(udp_payload, length);
   return false;
 }
 
 void MdPreprocessor::process(const udphdr &udp_header,
-                             const u_char *udp_payload) override {
+                             const u_char *udp_payload) {
 
-  assert(udp_data != nullptr);
+  assert(udp_payload != nullptr);
   if (is_valid_packet(udp_header, udp_payload) == false) {
     return;
   }
@@ -73,7 +73,10 @@ const u_char *MdPreprocessor::uncompress_message(const Message &message) {
 
   if (result != Z_OK) {
     std::cerr << "uncompress failed with code " << result
-              << ", skip this message" << '\n';
+              << ", skip this message: " << '\n';
+
+    print_hex_array(message.body() - sizeof(Message),
+                    sizeof(Message) + message.size_after_compress());
     return nullptr;
   }
 
@@ -108,7 +111,7 @@ bool MessageManager::handle(const UdpPayload &payload) {
 
   // seq gap, print a warn and ignore
   if (payload.sequence_id() > last_seq_id_ + 1) {
-    std::cerr << "channel " << payload.channel_id()
+    std::cerr << " channel " << payload.channel_id()
               << " gets seq gap in packet with seq: " << payload.sequence_id()
               << ", current seq: " << last_seq_id_ << '\n';
     print_hex_array(reinterpret_cast<const u_char *>(&payload),

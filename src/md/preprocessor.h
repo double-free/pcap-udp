@@ -122,8 +122,8 @@ class MdPreprocessor : public UdpPacketProcessor {
 public:
   using MdHandler = std::function<void(const u_char *, uint32_t)>;
 
-  MdPreprocessor(std::string netmask, MdHandler handler)
-      : UdpPacketProcessor(netmask), md_handler_(handler) {}
+  MdPreprocessor(std::string net, std::string netmask, MdHandler handler)
+      : UdpPacketProcessor(net, netmask), md_handler_(handler) {}
 
   // override UdpPacketProcessor::process
   void process(const udphdr &udp_header, const u_char *udp_payload) override;
