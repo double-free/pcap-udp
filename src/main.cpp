@@ -132,9 +132,11 @@ int main(int argc, char const *argv[]) {
   md::MdPreprocessor processor2(net2 + ".0", netmask, md_handler);
   reader.add_processor(&processor1);
   reader.add_processor(&processor2);
-  int udp_packet_count = reader.process();
 
-  std::cout << udp_packet_count << " udp packets processed\n";
+  // 1587627830 is 2020-04-23 15:43:50, from given output log,
+  uint64_t udp_packet_count = reader.process(1587627830);
+
+  std::cout << udp_packet_count << " udp packets processed" << '\n';
   for (const auto &kv : unhandled_message_count) {
     std::cerr << "unhandled message type: " << static_cast<uint32_t>(kv.first)
               << ", count: " << kv.second << '\n';

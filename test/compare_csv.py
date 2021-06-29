@@ -23,8 +23,20 @@ def compare_snapshot(snapshot1, snapshot2):
         return False
     return True
 
+# an ugly workaround
+def in_gap(bench_line) -> bool:
+    for field in bench_line:
+        if field.isdigit():
+            # timestamp is always the first digit field
+            timestamp = int(field)
+            break
 
-def compare(file, benchmark, comparator, max_err=1000) -> bool:
+    # needs to be very precise
+    if 1587611459.732 < timestamp / 1e6 < 1587611459.794:
+        return True
+    return False
+
+def compare(file, benchmark, comparator, max_err=1) -> bool:
     # may be out of order, so the compare shall between two containers
     # each container holds the recent n record
     my_recent_lines = []
@@ -53,6 +65,10 @@ def compare(file, benchmark, comparator, max_err=1000) -> bool:
             my_cached_lines = []
             bench_cached_lines = []
             for idx, bench_line in enumerate(bench_reader):
+                # very ugly workaround
+                # if in_gap(bench_line):
+                #     continue
+
                 my_line = next(my_reader)
                 if comparator(my_line, bench_line) == True:
                     continue

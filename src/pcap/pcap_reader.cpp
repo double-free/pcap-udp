@@ -44,16 +44,19 @@ int PcapReader::read_pcap_packet(const u_char *packet) {
     }
   }
   // does not match any processor
-  std::cout << "udp packet " << udp_packet_index << " from "
+  std::cout << "udp packet " << udp_packet_index_ << " from "
             << inet_ntoa(ip_header->ip_src)
             << " does not match any of the processor\n";
   return 0;
 }
 
-int PcapReader::process() {
-  int processed_count = 0;
+uint64_t PcapReader::process(long stop_epoch_seconds) {
+  uint64_t processed_count = 0;
   for (const u_char *next_packet = pcap_next(file_, &header_);
        next_packet != nullptr; next_packet = pcap_next(file_, &header_)) {
+    if (header_.ts.tv_sec > stop_epoch_seconds) {
+      break;
+    }
     processed_count += read_pcap_packet(next_packet);
   }
   return processed_count;

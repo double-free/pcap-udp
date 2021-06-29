@@ -3,6 +3,7 @@
 #include "udp_packet_processor.h"
 
 #include <cassert>
+#include <limits>
 #include <pcap.h>
 #include <stdexcept>
 #include <vector>
@@ -39,7 +40,7 @@ public:
   int read_pcap_packet(const u_char *packet);
 
   // loop until file ends, return how many packets parsed
-  int process();
+  uint64_t process(long stop_epoch_seconds = std::numeric_limits<long>::max());
 
   const pcap_pkthdr &pcap_header() const { return header_; }
 
