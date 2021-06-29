@@ -50,8 +50,6 @@ int main(int argc, char const *argv[]) {
   md::MdArbitrator arbitrator;
   auto md_handler = [&](const u_char *data, uint32_t data_len) {
     md::PackedMarketData mds(data, data_len);
-    // std::cout << "got message with length " << data_len << ": ";
-    // md::print_hex_array(data, data_len);
     for (const md::MdHeader *header = mds.next_md(); header != nullptr;
          header = mds.next_md()) {
       const u_char *body =

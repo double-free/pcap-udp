@@ -98,20 +98,9 @@ void Buffer::fill(uint16_t packet_index, const u_char *src, uint32_t length) {
 }
 
 bool MessageManager::handle(const UdpPayload &payload) {
-  if (payload.sequence_id() <= last_seq_id_) {
-    // outdated, drop it
-    std::cerr << "channel " << payload.channel_id()
-              << " dropped a outdated packet with seq: "
-              << payload.sequence_id() << ", current seq: " << last_seq_id_
-              << '\n';
-    print_hex_array(reinterpret_cast<const u_char *>(&payload),
-                    sizeof(UdpPayload) + payload.body_size());
-    return false;
-  }
-
   // seq gap, print a warn and ignore
-  if (payload.sequence_id() > last_seq_id_ + 1) {
-    std::cerr << " channel " << payload.channel_id()
+  if (payload.sequence_id() != last_seq_id_ + 1) {
+    std::cout << " channel " << payload.channel_id()
               << " gets seq gap in packet with seq: " << payload.sequence_id()
               << ", current seq: " << last_seq_id_ << '\n';
     print_hex_array(reinterpret_cast<const u_char *>(&payload),

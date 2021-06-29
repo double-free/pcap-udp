@@ -44,7 +44,9 @@ int PcapReader::read_pcap_packet(const u_char *packet) {
     }
   }
   // does not match any processor
-  std::cout << inet_ntoa(ip_header->ip_src) << " does not match\n";
+  std::cout << "udp packet " << udp_packet_index << " from "
+            << inet_ntoa(ip_header->ip_src)
+            << " does not match any of the processor\n";
   return 0;
 }
 

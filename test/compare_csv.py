@@ -4,15 +4,6 @@ import argparse
 import csv
 
 
-class CompareResult:
-    def __init__(self):
-        self.success = 0
-        self.failure = 0
-
-    def __str__(self):
-        return f'success: {self.success}, failure: {self.failure}'
-
-
 def compare_trade(trade1, trade2):
     if trade1[2:] != trade2[2:]:
         return False
@@ -20,15 +11,20 @@ def compare_trade(trade1, trade2):
 
 
 def compare_order(order1, order2):
-    pass
+    channel_id = str(int(order2[6]) >> 16)
+
+    if order1[6] == channel_id and order1[7:] == order2[7:]:
+        return True
+    return False
 
 
-def compare_snapshot():
-    pass
+def compare_snapshot(snapshot1, snapshot2):
+    if snapshot1[5:] != snapshot2[5:]:
+        return False
+    return True
 
 
-def compare(file, benchmark, comparator, max_err=10) -> CompareResult:
-    result = CompareResult()
+def compare(file, benchmark, comparator, max_err=1000) -> bool:
     # may be out of order, so the compare shall between two containers
     # each container holds the recent n record
     my_recent_lines = []
@@ -49,10 +45,13 @@ def compare(file, benchmark, comparator, max_err=10) -> CompareResult:
 
     with open(benchmark, newline='') as bench_csv:
         bench_reader = csv.reader(bench_csv, delimiter=',')
-        my_cached_lines = []
-        bench_cached_lines = []
         with open(file, newline='') as my_csv:
             my_reader = csv.reader(my_csv, delimiter=',')
+            # skip header
+            next(my_reader)
+            next(bench_reader)
+            my_cached_lines = []
+            bench_cached_lines = []
             for idx, bench_line in enumerate(bench_reader):
                 my_line = next(my_reader)
                 if comparator(my_line, bench_line) == True:
@@ -91,7 +90,5 @@ if __name__ == "__main__":
     if args.mode not in m.keys():
         print("unsupported mode: ", args.mode)
         exit(1)
-    result = CompareResult()
-    print(result)
+
     result = compare(args.file, args.benchmark, m[args.mode])
-    print(result)
