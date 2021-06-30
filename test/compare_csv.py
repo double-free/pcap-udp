@@ -23,19 +23,40 @@ def compare_snapshot(snapshot1, snapshot2):
         return False
     return True
 
-# an ugly workaround
-def in_gap(bench_line) -> bool:
-    for field in bench_line:
+def get_timestamp(csv_line):
+    for field in csv_line:
         if field.isdigit():
             # timestamp is always the first digit field
-            timestamp = int(field)
-            break
+            return int(field)
+
+# an ugly workaround
+def in_gap(bench_line) -> bool:
+    timestamp = get_timestamp(bench_line) / 1e6
 
     # needs to be very precise
-    if 1587611459.732 < timestamp / 1e6 < 1587611459.794:
+    if 1587611459.732 < timestamp < 1587611459.794:
         return True
-    if 1587611460.094 < timestamp / 1e6 < 1587611460.704:
+    if 1587611460.094 < timestamp < 1587611460.6704:
         return True
+    # 111016450 to 111016850
+    if 1587611460.8134 < timestamp < 1587611461.215:
+        return True
+    # 111017150 to 111017610
+    if 1587611461.516 < timestamp < 1587611461.974:
+        return True
+    # 111018620 to 111019110
+    if 1587611462.986 < timestamp < 1587611463.470:
+        return True
+    # 111019360 to 1111019370
+    if 1587611463.7217 < timestamp < 1587611463.7351:
+        return True
+    # 111020600 to 111020920
+    if 1587611464.9602 < timestamp < 1587611465.2864:
+        return True
+    # 111021130 to 111021560
+    if 1587611465.4955 < timestamp < 1587611465.921:
+        return True
+
     return False
 
 def compare(file, benchmark, comparator, max_err=1000) -> bool:
