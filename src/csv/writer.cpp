@@ -33,7 +33,7 @@ void Writer::write_trade(const md::Trade &trade, uint64_t pcap_ts,
 void Writer::write_snapshot(const md::SnapshotWrapper &snapshot,
                             uint64_t pcap_ts, uint64_t pcap_seq, int depth) {
   // placeholders
-  csv_file_ << "09:42:12.094767,1587606132095370,23994," << pcap_ts << ','
+  csv_file_ << "09:42:12.094767," << pcap_ts << ",23994," << pcap_ts << ','
             << pcap_seq << ",24," << snapshot.security_id << ",SZ,"
             << md::timestamp_to_string(snapshot.orig_time) << ','
             << snapshot.total_trade_volume / Writer::QUANTITY_MULT << ','

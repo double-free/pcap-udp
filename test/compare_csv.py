@@ -32,30 +32,28 @@ def get_timestamp(csv_line):
 # an ugly workaround
 def in_gap(bench_line) -> bool:
     timestamp = get_timestamp(bench_line) / 1e6
+    gaps = [
+        [1587611459.7320, 1587611459.7940],
+        [1587611460.0940, 1587611460.6704],
+        [1587611460.8134, 1587611461.2150], # 111016450 to 111016850
+        [1587611461.5160, 1587611461.9740], # 111017150 to 111017610
+        [1587611462.9860, 1587611463.4700], # 111018620 to 111019110
+        [1587611463.7217, 1587611463.7351], # 111019360 to 111019370
+        [1587611464.9602, 1587611465.2864], # 111020600 to 111020920
+        [1587611465.4955, 1587611465.9210], # 111021130 to 111021560
+        [1587611466.0643, 1587611466.5486], # 111021700 to 111022190
+        [1587611815.0935, 1587611815.1270], # 111610730 to 111610760
+        [1587611815.4464, 1587611815.8349], # 111611080 to 111611470
+        [1587611816.1391, 1587611816.4821], # 111611770 to 111612120
+        [1587611816.7568, 1587611816.7590], # 111612390, only two lines
+        [1587611816.9259, 1587611817.3479], # 111612560 to 111612980
+        [1587611857.6653, 1587611857.8604], # 111653300 to 111653490
+        [1587611858.4109, 1587611858.7822], # 111654040 to 111654420
+    ]
 
-    # needs to be very precise
-    if 1587611459.732 < timestamp < 1587611459.794:
-        return True
-    if 1587611460.094 < timestamp < 1587611460.6704:
-        return True
-    # 111016450 to 111016850
-    if 1587611460.8134 < timestamp < 1587611461.215:
-        return True
-    # 111017150 to 111017610
-    if 1587611461.516 < timestamp < 1587611461.974:
-        return True
-    # 111018620 to 111019110
-    if 1587611462.986 < timestamp < 1587611463.470:
-        return True
-    # 111019360 to 1111019370
-    if 1587611463.7217 < timestamp < 1587611463.7351:
-        return True
-    # 111020600 to 111020920
-    if 1587611464.9602 < timestamp < 1587611465.2864:
-        return True
-    # 111021130 to 111021560
-    if 1587611465.4955 < timestamp < 1587611465.921:
-        return True
+    for gap in gaps:
+        if gap[0] < timestamp < gap[1]:
+            return True
 
     return False
 
@@ -89,6 +87,7 @@ def compare(file, benchmark, comparator, max_err=1000) -> bool:
             bench_cached_lines = []
 
             prev_check_point = 0
+            skipped_lines = 0
             for idx, bench_line in enumerate(bench_reader):
                 if idx - prev_check_point == 100000:
                     print(f"check point, line {idx}: {bench_line}")
@@ -96,6 +95,7 @@ def compare(file, benchmark, comparator, max_err=1000) -> bool:
 
                 # very ugly workaround
                 if in_gap(bench_line):
+                    skipped_lines += 1
                     continue
 
                 my_line = next(my_reader)
@@ -110,13 +110,14 @@ def compare(file, benchmark, comparator, max_err=1000) -> bool:
                         print(f"find difference in below lines: ")
                         print(f"mine:  {line1}")
                         print(f"bench: {line2}")
+                    print(f"gap skipped {skipped_lines} lines")
                     return False
 
                 if compare_containers(my_cached_lines, bench_cached_lines):
                     # clear both cache
                     my_cached_lines = []
                     bench_cached_lines = []
-
+    print(f"gap skipped {skipped_lines} lines")
     return True
 
 
